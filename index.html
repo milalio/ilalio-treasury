@@ -77,6 +77,24 @@
   .tip { position: absolute; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgb(0 0 0 / .12); padding: 6px 10px; font-size: 12px; pointer-events: none; white-space: nowrap; z-index: 1; }
   .tip .t { color: var(--muted); margin-bottom: 2px; }
   .sh { margin: 16px 0 0; font-size: 15px; font-weight: 600; }
+  .tx { list-style: none; margin: 0 0 10px; padding: 6px 10px; display: grid; gap: 4px; background: var(--bg); border-radius: 8px; }
+  .tx li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .tx li:last-child { border-bottom: 0; }
+  .tx .meta { display: block; }
+  .tx .amt { white-space: nowrap; }
+  .tx .amt.credit, .credit { color: var(--ok); }
+  .pill { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+  .cat > summary { list-style: none; cursor: pointer; }
+  dialog.sheet { width: min(30rem, calc(100% - 32px)); max-height: calc(100% - 48px); overflow: auto; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--fg); font-family: var(--sans); font-variant-numeric: tabular-nums; }
+  dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
+  .sheet-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .close { font: inherit; width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+  .dt-amt { margin: 0; font-family: var(--serif); font-size: 40px; line-height: 1.1; }
+  .dt-name { margin: 6px 0 0; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+  .dt-date { margin: 2px 0 12px; color: var(--muted); }
+  dl.dt { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 14px; }
+  dl.dt dt { color: var(--muted); } dl.dt dd { margin: 0; text-align: right; }
+  .sheet h4 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
   footer { color: var(--muted); font-size: 12px; text-align: center; padding-top: 8px; }
   .err { color: var(--muted); text-align: center; padding: 40px 0; }
   @media (max-width: 30rem) { .tiles .v { font-size: 15px; } .big { font-size: 36px; } }
@@ -119,7 +137,7 @@
     </div>
     <div class="card">
       <h2>Budgets by group</h2>
-      <p class="note">Spent plus bills still due, against each budget. Spending with no budget set counts as over. Tap a group to see its categories.</p>
+      <p class="note">Spent plus bills still due, against each budget. Spending with no budget set counts as over. Tap a group for its categories, a category for its transactions, and a transaction for its details.</p>
       <div class="groups" id="groups"></div>
     </div>
   </section>
@@ -143,7 +161,7 @@
       <div class="chart" id="spentChart"></div>
       <div class="legend" id="spentLegend"></div>
       <h3 class="sh" id="spentMonth">—</h3>
-      <p class="note">Tap a bar to see that month. Tap a group to see its categories.</p>
+      <p class="note">Tap a bar to see that month. Tap a group for its categories, a category for its transactions, and a transaction for its details.</p>
       <div class="groups" id="spentBreak"></div>
     </div>
     <div class="card">
@@ -179,6 +197,11 @@
     </div>
   </section>
 
+  <dialog class="sheet" id="sheet" aria-label="Transaction details">
+    <div class="sheet-top"><span class="eyebrow">Transaction</span><button type="button" class="close" id="sheetClose" aria-label="Close">✕</button></div>
+    <div id="sheetBody"></div>
+  </dialog>
+
   <footer id="updated"></footer>
 </div>
 
@@ -197,6 +220,53 @@
   const tickFmt = (v) => { const a = Math.abs(v), s = v < 0 ? '−' : ''; return a >= 1e6 ? s + '$' + d3.format('.2~f')(a / 1e6) + 'M' : a >= 1000 ? s + '$' + d3.format('~')(Math.round(a / 100) / 10) + 'K' : s + fmt$(a); };
   const palette = () => ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--c7'].map(css);
   const open = new Set();
+
+  // ---------- Transactions ----------
+  const sheet = document.getElementById('sheet');
+  document.getElementById('sheetClose').addEventListener('click', () => sheet.close());
+  sheet.addEventListener('click', (ev) => { if (ev.target === sheet) sheet.close(); });
+  const showTx = (t) => {
+    const refund = t.amount < 0;
+    const body = document.getElementById('sheetBody');
+    const dl = mk('dl', 'dt');
+    const row = (k, v) => dl.append(mk('dt', '', k), mk('dd', '', v));
+    row('Category', t.group && t.group !== t.category ? t.category + ' · ' + t.group : t.category);
+    row('Type', refund ? 'Refund' : 'Expense');
+    row('Status', t.pending ? 'Pending' : 'Posted');
+    const parts = [mk('p', 'dt-amt' + (refund ? ' credit' : ''), (refund ? '+' : '') + d3.format('$,.2f')(Math.abs(t.amount))), mk('p', 'dt-name', t.name), mk('p', 'dt-date', d3.timeFormat('%A, %B %-d, %Y')(pd(t.date))), dl];
+    const others = (D.transactions || []).filter((o) => o.name === t.name && o !== t).slice(0, 8);
+    if (others.length) {
+      const box = mk('div'); box.append(mk('h4', '', 'Other ' + t.name + ' transactions'));
+      const ul = mk('ul', 'tx');
+      ul.append(...others.map((o) => { const li = mk('li'); li.addEventListener('click', () => showTx(o)); const l = mk('span'); l.append(mk('span', '', d3.timeFormat('%b %-d')(pd(o.date))), mk('span', 'meta', o.category)); li.append(l, mk('span', 'amt' + (o.amount < 0 ? ' credit' : ''), (o.amount < 0 ? '+' : '') + fmt$(Math.abs(o.amount)))); return li; }));
+      box.append(ul); parts.push(box);
+    }
+    body.replaceChildren(...parts);
+    if (!sheet.open) sheet.showModal();
+  };
+  // Transactions in one category for one month (YYYY-MM)
+  const txList = (cat, month) => {
+    const ul = mk('ul', 'tx');
+    if (!(D.txMonths || []).includes(month)) { ul.append(mk('li', 'meta', 'Transactions are kept for the last ' + ((D.txMonths || []).length || 3) + ' months only.')); return ul; }
+    const items = (D.transactions || []).filter((t) => t.category === cat && t.date.slice(0, 7) === month).sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
+    if (!items.length) { ul.append(mk('li', 'meta', 'No transactions.')); return ul; }
+    ul.append(...items.map((t) => {
+      const li = mk('li'); li.tabIndex = 0;
+      li.addEventListener('click', () => showTx(t));
+      li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') showTx(t); });
+      const l = mk('span'); l.append(mk('span', '', t.name));
+      if (t.pending) l.append(mk('span', 'pill', 'Pending'));
+      l.append(mk('span', 'meta', d3.timeFormat('%b %-d')(pd(t.date))));
+      li.append(l, mk('span', 'amt' + (t.amount < 0 ? ' credit' : ''), t.amount < 0 ? '+' + fmt$(Math.abs(t.amount)) + ' refund' : money(t.amount)));
+      return li;
+    }));
+    return ul;
+  };
+  const catDetails = (key, summaryRow, cat, month) => {
+    const det = mk('details', 'cat'); keep(key, det);
+    const s = mk('summary'); s.append(summaryRow); det.append(s, txList(cat, month));
+    return det;
+  };
 
   // Tabs
   const showTab = (name) => {
@@ -256,10 +326,10 @@
     groups.sort((a, b) => (b.left < 0) - (a.left < 0) || (b.budget > 0) - (a.budget > 0) || b.budget - a.budget || b.spent - a.spent);
     $('groups').replaceChildren(...groups.map((g) => {
       const kids = g.children.filter(shows).sort((a, b) => (b.left < 0) - (a.left < 0) || (b.spent + b.upcoming) - (a.spent + a.upcoming));
-      if (!kids.length) { const d = mk('div', 'g'); d.append(rowEl(g, false)); return d; }
+      if (!kids.length) { const d = catDetails('b:' + g.name, rowEl(g, true), g.name, D.month); d.className = 'g'; return d; }
       const det = mk('details', 'g'); keep('b:' + g.name, det);
       const s = mk('summary'); s.append(rowEl(g, true)); det.append(s);
-      const k = mk('div', 'kids'); k.append(...kids.map((c) => rowEl(c, false))); det.append(k);
+      const k = mk('div', 'kids'); k.append(...kids.map((c) => catDetails('bc:' + c.name, rowEl(c, true), c.name, D.month))); det.append(k);
       return det;
     }));
   };
@@ -350,7 +420,7 @@
     if (!groups.length) { $('spentBreak').replaceChildren(mk('p', 'note', 'No spending this month.')); return; }
     const line = (r, color, isGroup, caret) => {
       const w = mk('div', 'row'), top = mk('div', 'row-top'), nm = mk('span', 'name');
-      if (isGroup) nm.append(mk('span', 'caret', caret ? '›' : ''));
+      if (isGroup || caret) nm.append(mk('span', 'caret', caret ? '›' : ''));
       if (color) { const sw = mk('i', 'sw'); sw.style.background = color; nm.append(sw); }
       nm.append(document.createTextNode(r.name));
       top.append(nm, mk('span', 'status none', money(r.spent) + (r.spent > 0 ? ' · ' + pct(r.spent / tot) : '')));
@@ -361,10 +431,10 @@
     $('spentBreak').replaceChildren(...groups.map((g) => {
       const color = P.keyOf(g.name) === 'Everything else' ? css('--muted-fill') : P.color(g.name);
       const kids = g.children.slice().sort((a, b) => b.spent - a.spent);
-      if (!kids.length) { const d = mk('div', 'g'); d.append(line(g, color, true, false)); return d; }
+      if (!kids.length) { const d = catDetails('r:' + g.name + ':' + m, line(g, color, true, true), g.name, m); d.className = 'g'; return d; }
       const det = mk('details', 'g'); keep('r:' + g.name, det);
       const s = mk('summary'); s.append(line(g, color, true, true)); det.append(s);
-      const k = mk('div', 'kids'); k.append(...kids.map((c) => line(c, null, false))); det.append(k);
+      const k = mk('div', 'kids'); k.append(...kids.map((c) => catDetails('rc:' + c.name + ':' + m, line(c, null, false, true), c.name, m))); det.append(k);
       return det;
     }));
   };

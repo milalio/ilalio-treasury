@@ -9,11 +9,16 @@ plain JSON, or a list of {"type": "text", "text": ...} blocks, and may carry tra
   raw/income_12mo.json    get-monthly-income            from=<same 12-month range>
   raw/networth.json       get-networth-history          timeFrame=ONE_YEAR
   raw/recurrings.json     get-recurrings                state=ACTIVE
+  raw/tx_1.json, tx_2.json, ...  search-transactions   first=100, filter.dates=[{from:<1st of month 2 months ago>, to:<last day of this month>}],
+                                                        filter.types=["REGULAR"], sort=[{field:"DATE",direction:"DESC"}],
+                                                        one file per page, following pageInfo.endCursor as `after` until hasNextPage is false
 
 What is kept on purpose: budgets and spending by category, monthly income/spending,
-a net worth trend, and recurring totals.
+a net worth trend, recurring totals, and the last 3 months of categorized expenses and
+refunds (date, merchant name, amount, category, pending).
 What is left out on purpose: accounts and balances, card numbers, loan names/addresses,
-individual transactions, merchants, notes, and individual bill names.
+the account a transaction was paid from, notes, tags, transfers, income, uncategorized or
+excluded transactions, and individual bill names.
 
 Usage: python3 build_data.py [raw_dir] [out_file]
 """
@@ -133,6 +138,30 @@ def main(raw_dir="raw", out_file="data.json"):
     other = sum((r.get("nextPaymentAmount") or 0) * per_year.get(r.get("frequency"), 1) for r in rec if r.get("frequency") != "MONTHLY")
     recurring = {"monthly": r2(monthly), "other": r2(other), "perYear": r2(monthly * 12 + other), "count": len(rec)}
 
+    # ---- Recent transactions (trimmed) ----------------------------------------
+    tx_files = sorted(raw.glob("tx_*.json"), key=lambda p: int(p.stem.split("_")[1]))
+    transactions, seen = [], set()
+    for p in tx_files:
+        for e in load(p).get("edges", []):
+            t = e.get("node") or {}
+            c = t.get("category")
+            if t.get("type") != "REGULAR" or t.get("isExcluded") or not c:
+                continue
+            key = t.get("id") or (t.get("date"), t.get("name"), t.get("amount"))
+            if key in seen:
+                continue
+            seen.add(key)
+            transactions.append({
+                "date": str(t.get("date"))[:10],
+                "name": t.get("name") or "",
+                "amount": r2(t.get("amount")),
+                "category": c.get("name") or "",
+                "group": (c.get("parent") or {}).get("name") or c.get("name") or "",
+                "pending": bool(t.get("isPending")),
+            })
+    tx_months = months_list[-3:] if tx_files else []
+    transactions = [t for t in transactions if t["date"][:7] in tx_months]
+
     data = {
         "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "month": month,
@@ -143,9 +172,11 @@ def main(raw_dir="raw", out_file="data.json"):
         "categoriesByMonth": by_month,
         "networth": networth,
         "recurring": recurring,
+        "txMonths": tx_months,
+        "transactions": transactions,
     }
     Path(out_file).write_text(json.dumps(data, separators=(",", ":")))
-    print(f"wrote {out_file}: month {month}, {len(months)} months, {len(groups)} budget groups, {len(weekly)} net worth points")
+    print(f"wrote {out_file}: month {month}, {len(months)} months, {len(groups)} budget groups, {len(weekly)} net worth points, {len(transactions)} transactions")
 
 
 if __name__ == "__main__":
