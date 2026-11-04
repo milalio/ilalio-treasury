@@ -14,7 +14,8 @@ plain JSON, or a list of {"type": "text", "text": ...} blocks, and may carry tra
                                                         one file per page, following pageInfo.endCursor as `after` until hasNextPage is false
 
 What is kept on purpose: budgets and spending by category, monthly income/spending,
-a net worth trend, recurring totals, and the last 3 months of categorized expenses and
+a net worth trend, recurring totals, recurring payments still due this month (date, name,
+amount, category), and the last 3 months of categorized expenses and
 refunds (date, merchant name, amount, category, pending).
 What is left out on purpose: accounts and balances, card numbers, loan names/addresses,
 the account a transaction was paid from, notes, tags, transfers, income, uncategorized or
@@ -162,6 +163,23 @@ def main(raw_dir="raw", out_file="data.json"):
     tx_months = months_list[-3:] if tx_files else []
     transactions = [t for t in transactions if t["date"][:7] in tx_months]
 
+    # ---- Recurring payments still due this month ------------------------------
+    parent_of = {r["name"]: r["parent"] for r in rows}
+    upcoming = []
+    for r in rec:
+        d = str(r.get("nextPaymentDate") or "")[:10]
+        cat_name = (r.get("category") or {}).get("name")
+        if not cat_name or d[:7] != month:
+            continue
+        upcoming.append({
+            "date": d,
+            "name": r.get("name") or "",
+            "amount": r2(r.get("nextPaymentAmount")),
+            "category": cat_name,
+            "group": parent_of.get(cat_name) or cat_name,
+        })
+    upcoming.sort(key=lambda u: (u["date"], u["name"]))
+
     data = {
         "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "month": month,
@@ -174,9 +192,10 @@ def main(raw_dir="raw", out_file="data.json"):
         "recurring": recurring,
         "txMonths": tx_months,
         "transactions": transactions,
+        "upcoming": upcoming,
     }
     Path(out_file).write_text(json.dumps(data, separators=(",", ":")))
-    print(f"wrote {out_file}: month {month}, {len(months)} months, {len(groups)} budget groups, {len(weekly)} net worth points, {len(transactions)} transactions")
+    print(f"wrote {out_file}: month {month}, {len(months)} months, {len(groups)} budget groups, {len(weekly)} net worth points, {len(transactions)} transactions, {len(upcoming)} upcoming recurring")
 
 
 if __name__ == "__main__":

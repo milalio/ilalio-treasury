@@ -137,7 +137,7 @@
     </div>
     <div class="card">
       <h2>Budgets by group</h2>
-      <p class="note">Spent plus bills still due, against each budget. Spending with no budget set counts as over. Tap a group for its categories, a category for its transactions, and a transaction for its details.</p>
+      <p class="note">Spent plus bills still due, against each budget. Spending with no budget set counts as over. Tap a group for its categories, a category for its transactions (including recurring payments still due), and a transaction for its details.</p>
       <div class="groups" id="groups"></div>
     </div>
   </section>
@@ -227,6 +227,16 @@
   sheet.addEventListener('click', (ev) => { if (ev.target === sheet) sheet.close(); });
   const showTx = (t) => {
     const refund = t.amount < 0;
+    if (t.upcoming) {
+      const dl = mk('dl', 'dt');
+      const row = (k, v) => dl.append(mk('dt', '', k), mk('dd', '', v));
+      row('Category', t.group && t.group !== t.category ? t.category + ' · ' + t.group : t.category);
+      row('Type', refund ? 'Recurring credit' : 'Recurring payment');
+      row('Status', 'Expected, not paid yet');
+      document.getElementById('sheetBody').replaceChildren(mk('p', 'dt-amt' + (refund ? ' credit' : ''), (refund ? '+' : '') + d3.format('$,.2f')(Math.abs(t.amount))), mk('p', 'dt-name', t.name), mk('p', 'dt-date', 'Due ' + d3.timeFormat('%A, %B %-d, %Y')(pd(t.date))), dl);
+      if (!sheet.open) sheet.showModal();
+      return;
+    }
     const body = document.getElementById('sheetBody');
     const dl = mk('dl', 'dt');
     const row = (k, v) => dl.append(mk('dt', '', k), mk('dd', '', v));
@@ -245,11 +255,22 @@
     if (!sheet.open) sheet.showModal();
   };
   // Transactions in one category for one month (YYYY-MM)
-  const txList = (cat, month) => {
+  const txList = (cat, month, withUpcoming) => {
     const ul = mk('ul', 'tx');
-    if (!(D.txMonths || []).includes(month)) { ul.append(mk('li', 'meta', 'Transactions are kept for the last ' + ((D.txMonths || []).length || 3) + ' months only.')); return ul; }
+    const due = withUpcoming && month === D.month ? (D.upcoming || []).filter((u) => u.category === cat) : [];
+    ul.append(...due.map((u) => {
+      const li = mk('li'); li.tabIndex = 0;
+      const t = { ...u, upcoming: true };
+      li.addEventListener('click', () => showTx(t));
+      li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') showTx(t); });
+      const l = mk('span'); l.append(mk('span', '', u.name), mk('span', 'pill', 'Upcoming'), mk('span', 'meta', 'Due ' + d3.timeFormat('%b %-d')(pd(u.date))));
+      const a = mk('span', 'amt meta', (u.amount < 0 ? '+' : '') + fmt$(Math.abs(u.amount)));
+      li.append(l, a);
+      return li;
+    }));
+    if (!(D.txMonths || []).includes(month)) { if (due.length) return ul; ul.append(mk('li', 'meta', 'Transactions are kept for the last ' + ((D.txMonths || []).length || 3) + ' months only.')); return ul; }
     const items = (D.transactions || []).filter((t) => t.category === cat && t.date.slice(0, 7) === month).sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
-    if (!items.length) { ul.append(mk('li', 'meta', 'No transactions.')); return ul; }
+    if (!items.length) { if (!due.length) ul.append(mk('li', 'meta', 'No transactions yet.')); return ul; }
     ul.append(...items.map((t) => {
       const li = mk('li'); li.tabIndex = 0;
       li.addEventListener('click', () => showTx(t));
@@ -262,9 +283,9 @@
     }));
     return ul;
   };
-  const catDetails = (key, summaryRow, cat, month) => {
+  const catDetails = (key, summaryRow, cat, month, withUpcoming) => {
     const det = mk('details', 'cat'); keep(key, det);
-    const s = mk('summary'); s.append(summaryRow); det.append(s, txList(cat, month));
+    const s = mk('summary'); s.append(summaryRow); det.append(s, txList(cat, month, withUpcoming));
     return det;
   };
 
@@ -326,10 +347,10 @@
     groups.sort((a, b) => (b.left < 0) - (a.left < 0) || (b.budget > 0) - (a.budget > 0) || b.budget - a.budget || b.spent - a.spent);
     $('groups').replaceChildren(...groups.map((g) => {
       const kids = g.children.filter(shows).sort((a, b) => (b.left < 0) - (a.left < 0) || (b.spent + b.upcoming) - (a.spent + a.upcoming));
-      if (!kids.length) { const d = catDetails('b:' + g.name, rowEl(g, true), g.name, D.month); d.className = 'g'; return d; }
+      if (!kids.length) { const d = catDetails('b:' + g.name, rowEl(g, true), g.name, D.month, true); d.className = 'g'; return d; }
       const det = mk('details', 'g'); keep('b:' + g.name, det);
       const s = mk('summary'); s.append(rowEl(g, true)); det.append(s);
-      const k = mk('div', 'kids'); k.append(...kids.map((c) => catDetails('bc:' + c.name, rowEl(c, true), c.name, D.month))); det.append(k);
+      const k = mk('div', 'kids'); k.append(...kids.map((c) => catDetails('bc:' + c.name, rowEl(c, true), c.name, D.month, true))); det.append(k);
       return det;
     }));
   };
