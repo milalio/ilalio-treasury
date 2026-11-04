@@ -82,6 +82,7 @@
   .tx li:last-child { border-bottom: 0; }
   .tx .meta { display: block; }
   .tx .amt { white-space: nowrap; }
+  .txnote { display: block; margin-top: 3px; padding: 2px 8px; border-left: 2px solid var(--c1); border-radius: 0 6px 6px 0; background: var(--panel); color: var(--fg); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
   .tx .amt.credit, .credit { color: var(--ok); }
   .pill { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line); font-size: 11px; color: var(--muted); }
   .cat > summary { list-style: none; cursor: pointer; }
@@ -249,7 +250,7 @@
     if (others.length) {
       const box = mk('div'); box.append(mk('h4', '', 'Other ' + t.name + ' transactions'));
       const ul = mk('ul', 'tx');
-      ul.append(...others.map((o) => { const li = mk('li'); li.addEventListener('click', () => showTx(o)); const l = mk('span'); l.append(mk('span', '', d3.timeFormat('%b %-d')(pd(o.date))), mk('span', 'meta', [o.category, o.note].filter(Boolean).join(' · '))); li.append(l, mk('span', 'amt' + (o.amount < 0 ? ' credit' : ''), (o.amount < 0 ? '+' : '') + fmt$(Math.abs(o.amount)))); return li; }));
+      ul.append(...others.map((o) => { const li = mk('li'); li.addEventListener('click', () => showTx(o)); const l = mk('span'); l.append(mk('span', '', d3.timeFormat('%b %-d')(pd(o.date))), mk('span', 'meta', o.category)); if (o.note) l.append(mk('span', 'txnote', o.note)); li.append(l, mk('span', 'amt' + (o.amount < 0 ? ' credit' : ''), (o.amount < 0 ? '+' : '') + fmt$(Math.abs(o.amount)))); return li; }));
       box.append(ul); parts.push(box);
     }
     body.replaceChildren(...parts);
@@ -278,7 +279,8 @@
       li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') showTx(t); });
       const l = mk('span'); l.append(mk('span', '', t.name));
       if (t.pending) l.append(mk('span', 'pill', 'Pending'));
-      l.append(mk('span', 'meta', [d3.timeFormat('%b %-d')(pd(t.date)), t.note].filter(Boolean).join(' · ')));
+      l.append(mk('span', 'meta', d3.timeFormat('%b %-d')(pd(t.date))));
+      if (t.note) l.append(mk('span', 'txnote', t.note));
       li.append(l, mk('span', 'amt' + (t.amount < 0 ? ' credit' : ''), t.amount < 0 ? '+' + fmt$(Math.abs(t.amount)) + ' refund' : money(t.amount)));
       return li;
     }));
