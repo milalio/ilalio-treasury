@@ -16,9 +16,9 @@ plain JSON, or a list of {"type": "text", "text": ...} blocks, and may carry tra
 What is kept on purpose: budgets and spending by category, monthly income/spending,
 a net worth trend, recurring totals, recurring payments still due this month (date, name,
 amount, category), and the last 3 months of categorized expenses and
-refunds (date, merchant name, amount, category, pending).
+refunds (date, merchant name, amount, category, pending, and the note added in Copilot).
 What is left out on purpose: accounts and balances, card numbers, loan names/addresses,
-the account a transaction was paid from, notes, tags, transfers, income, uncategorized or
+the account a transaction was paid from, tags, transfers, income, uncategorized or
 excluded transactions, and individual bill names.
 
 Usage: python3 build_data.py [raw_dir] [out_file]
@@ -159,6 +159,7 @@ def main(raw_dir="raw", out_file="data.json"):
                 "category": c.get("name") or "",
                 "group": (c.get("parent") or {}).get("name") or c.get("name") or "",
                 "pending": bool(t.get("isPending")),
+                "note": (t.get("note") or "").strip(),
             })
     tx_months = months_list[-3:] if tx_files else []
     transactions = [t for t in transactions if t["date"][:7] in tx_months]

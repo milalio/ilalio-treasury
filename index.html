@@ -243,12 +243,13 @@
     row('Category', t.group && t.group !== t.category ? t.category + ' · ' + t.group : t.category);
     row('Type', refund ? 'Refund' : 'Expense');
     row('Status', t.pending ? 'Pending' : 'Posted');
+    if (t.note) row('Note', t.note);
     const parts = [mk('p', 'dt-amt' + (refund ? ' credit' : ''), (refund ? '+' : '') + d3.format('$,.2f')(Math.abs(t.amount))), mk('p', 'dt-name', t.name), mk('p', 'dt-date', d3.timeFormat('%A, %B %-d, %Y')(pd(t.date))), dl];
     const others = (D.transactions || []).filter((o) => o.name === t.name && o !== t).slice(0, 8);
     if (others.length) {
       const box = mk('div'); box.append(mk('h4', '', 'Other ' + t.name + ' transactions'));
       const ul = mk('ul', 'tx');
-      ul.append(...others.map((o) => { const li = mk('li'); li.addEventListener('click', () => showTx(o)); const l = mk('span'); l.append(mk('span', '', d3.timeFormat('%b %-d')(pd(o.date))), mk('span', 'meta', o.category)); li.append(l, mk('span', 'amt' + (o.amount < 0 ? ' credit' : ''), (o.amount < 0 ? '+' : '') + fmt$(Math.abs(o.amount)))); return li; }));
+      ul.append(...others.map((o) => { const li = mk('li'); li.addEventListener('click', () => showTx(o)); const l = mk('span'); l.append(mk('span', '', d3.timeFormat('%b %-d')(pd(o.date))), mk('span', 'meta', [o.category, o.note].filter(Boolean).join(' · '))); li.append(l, mk('span', 'amt' + (o.amount < 0 ? ' credit' : ''), (o.amount < 0 ? '+' : '') + fmt$(Math.abs(o.amount)))); return li; }));
       box.append(ul); parts.push(box);
     }
     body.replaceChildren(...parts);
@@ -277,7 +278,7 @@
       li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') showTx(t); });
       const l = mk('span'); l.append(mk('span', '', t.name));
       if (t.pending) l.append(mk('span', 'pill', 'Pending'));
-      l.append(mk('span', 'meta', d3.timeFormat('%b %-d')(pd(t.date))));
+      l.append(mk('span', 'meta', [d3.timeFormat('%b %-d')(pd(t.date)), t.note].filter(Boolean).join(' · ')));
       li.append(l, mk('span', 'amt' + (t.amount < 0 ? ' credit' : ''), t.amount < 0 ? '+' + fmt$(Math.abs(t.amount)) + ' refund' : money(t.amount)));
       return li;
     }));
