@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Treasury">
+<meta name="theme-color" content="#f7f5f0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1b19" media="(prefers-color-scheme: dark)">
+<title>The Ilalio Treasury</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f5f0; --panel: #ffffff; --fg: #1c1b19; --muted: #6b675f; --line: #e4e0d7; --grid: #ece9e2;
+    --ok: #1f8a4c; --bad: #c8412b; --ref: #8a857b;
+    --c1: #3d6fd6; --c2: #e08a2c; --c3: #2a9d8f; --c4: #9b5de5; --c5: #d1495b; --c6: #6c8a3c; --c7: #c0a02a; --muted-fill: #b9b4aa;
+    --serif: "Source Serif 4", Georgia, serif; --sans: Inter, system-ui, -apple-system, sans-serif;
+    --r: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1b19; --panel: #262522; --fg: #f2efe9; --muted: #a39e94; --line: #3a3833; --grid: #33312d;
+      --ok: #4cc27f; --bad: #ef6b55; --ref: #9c978d;
+      --c1: #6f97ee; --c2: #f0a24f; --c3: #4bbfb1; --c4: #b58cf0; --c5: #ea6f80; --c6: #94b45e; --c7: #dcc051; --muted-fill: #5d5a54;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.45; font-variant-numeric: tabular-nums; -webkit-text-size-adjust: 100%; }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 20px 16px calc(32px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
+  header h1 { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0; letter-spacing: -0.01em; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  nav { position: sticky; top: 0; z-index: 2; display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; background: var(--bg); scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { flex: none; font: inherit; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; }
+  nav button[aria-selected="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  section { display: grid; gap: 14px; }
+  section[hidden] { display: none; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-width: 0; }
+  .card h2 { margin: 0; font-size: 17px; font-weight: 600; }
+  .note { margin: 4px 0 12px; color: var(--muted); font-size: 13px; }
+  .eyebrow { margin: 0; color: var(--muted); font-size: 13px; }
+  .big { margin: 4px 0; font-family: var(--serif); font-weight: 400; font-size: 42px; line-height: 1.1; }
+  .sub { margin: 0 0 12px; color: var(--muted); }
+  .up { color: var(--ok); } .down { color: var(--bad); }
+  .say { margin: 0; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .tiles p { margin: 0; } .tiles .l { color: var(--muted); font-size: 12px; } .tiles .v { font-size: 17px; font-weight: 600; }
+  .bar { position: relative; height: 14px; border-radius: 6px; background: var(--grid); display: flex; margin-top: 8px; }
+  .bar.sm { height: 8px; margin-top: 0; }
+  .seg { height: 100%; } .seg:first-child { border-radius: 6px 0 0 6px; }
+  .tick { position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 1px; background: var(--fg); }
+  .tick.limit { background: var(--bad); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+  .groups { display: grid; gap: 6px; }
+  .g { border-top: 1px solid var(--line); padding-top: 10px; }
+  .g:first-child { border-top: 0; padding-top: 0; }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  .row { display: grid; gap: 6px; padding-bottom: 6px; }
+  .row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .name { font-weight: 500; display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+  .kids .name { font-weight: 400; }
+  .caret { display: inline-block; width: 1em; color: var(--muted); transition: transform .2s; }
+  details[open] > summary .caret { transform: rotate(90deg); }
+  .status { font-size: 13px; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.over { color: var(--bad); } .status.none { color: var(--muted); }
+  .meta { font-size: 12px; color: var(--muted); }
+  .kids { display: grid; gap: 6px; padding: 4px 0 10px 1em; }
+  .chart { position: relative; min-height: 220px; }
+  .chart svg { display: block; }
+  .chart text { font-family: var(--sans); font-size: 11px; fill: var(--muted); }
+  .tip { position: absolute; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgb(0 0 0 / .12); padding: 6px 10px; font-size: 12px; pointer-events: none; white-space: nowrap; z-index: 1; }
+  .tip .t { color: var(--muted); margin-bottom: 2px; }
+  .sh { margin: 16px 0 0; font-size: 15px; font-weight: 600; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; padding-top: 8px; }
+  .err { color: var(--muted); text-align: center; padding: 40px 0; }
+  @media (max-width: 30rem) { .tiles .v { font-size: 15px; } .big { font-size: 36px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>The Ilalio Treasury</h1>
+    <p>Where the money went, and where it's going · <span id="month">—</span></p>
+  </header>
+
+  <nav role="tablist" aria-label="Pages">
+    <button role="tab" data-tab="budget" aria-selected="true">Budget</button>
+    <button role="tab" data-tab="reports" aria-selected="false">Reports</button>
+    <button role="tab" data-tab="networth" aria-selected="false">Net worth</button>
+    <button role="tab" data-tab="recurring" aria-selected="false">Recurring</button>
+  </nav>
+
+  <div id="loading" class="err">Loading…</div>
+
+  <section id="budget" data-panel="budget" hidden>
+    <p class="say" id="say">—</p>
+    <div class="card">
+      <p class="eyebrow">Left to spend this month</p>
+      <p class="big" id="left">—</p>
+      <div class="bar" id="overallBar"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--c1)"></i>Spent</span>
+        <span><i class="sw" style="background:var(--c1);opacity:.4"></i>Bills still due</span>
+        <span><i class="sw" style="background:var(--grid);box-shadow:inset 0 0 0 1px var(--line)"></i>Left</span>
+        <span><i class="sw" style="width:2px;height:12px;background:var(--fg)"></i>Even pace for today</span>
+      </div>
+      <div class="tiles">
+        <div><p class="l">Budget</p><p class="v" id="tBudget">—</p></div>
+        <div><p class="l">Spent</p><p class="v" id="tSpent">—</p></div>
+        <div><p class="l">Bills still due</p><p class="v" id="tDue">—</p></div>
+      </div>
+      <p class="note" style="margin-bottom:0">"Left" already sets aside the bills still due this month.</p>
+    </div>
+    <div class="card">
+      <h2>Budgets by group</h2>
+      <p class="note">Spent plus bills still due, against each budget. Spending with no budget set counts as over. Tap a group to see its categories.</p>
+      <div class="groups" id="groups"></div>
+    </div>
+  </section>
+
+  <section id="reports" data-panel="reports" hidden>
+    <p class="note" style="margin:0">Big numbers are year to date. Charts show the last 12 months; averages use full months only, so this month is shown lighter and left out of them.</p>
+    <div class="card">
+      <h2>Net income</h2>
+      <p class="note">Income minus spending each month.</p>
+      <p class="eyebrow">Year to date</p>
+      <p class="big" id="ytdNet">—</p>
+      <p class="sub">Average per month: <span id="avgNet">—</span></p>
+      <div class="chart" id="netChart"></div>
+    </div>
+    <div class="card">
+      <h2>Spending</h2>
+      <p class="note">Everything counted in budget categories each month, after refunds.</p>
+      <p class="eyebrow">Year to date</p>
+      <p class="big down" id="ytdSpent">—</p>
+      <p class="sub">Average per month: <span class="down" id="avgSpent">—</span></p>
+      <div class="chart" id="spentChart"></div>
+      <div class="legend" id="spentLegend"></div>
+      <h3 class="sh" id="spentMonth">—</h3>
+      <p class="note">Tap a bar to see that month. Tap a group to see its categories.</p>
+      <div class="groups" id="spentBreak"></div>
+    </div>
+    <div class="card">
+      <h2>Income</h2>
+      <p class="note">Paychecks, interest and other money marked as income.</p>
+      <p class="eyebrow">Year to date</p>
+      <p class="big up" id="ytdIncome">—</p>
+      <p class="sub">Average per month: <span class="up" id="avgIncome">—</span></p>
+      <div class="chart" id="incomeChart"></div>
+    </div>
+  </section>
+
+  <section id="networth" data-panel="networth" hidden>
+    <div class="card">
+      <p class="eyebrow">Net worth</p>
+      <p class="big" id="nwNow">—</p>
+      <p class="sub"><span id="nw30">—</span> past 30 days · <span id="nw1y">—</span> past year</p>
+      <div class="chart" id="nwChart"></div>
+      <p class="note" style="margin-bottom:0">Everything owned minus everything owed. Home values are estimates.</p>
+    </div>
+  </section>
+
+  <section id="recurring" data-panel="recurring" hidden>
+    <div class="card">
+      <p class="eyebrow">Monthly recurring</p>
+      <p class="big" id="rcMonthly">—</p>
+      <p class="sub">Every active bill and subscription that charges monthly. Card credits are subtracted.</p>
+      <div class="tiles">
+        <div><p class="l">Annual & other, per year</p><p class="v" id="rcOther">—</p></div>
+        <div><p class="l">All recurring, per year</p><p class="v" id="rcYear">—</p></div>
+        <div><p class="l">Active</p><p class="v" id="rcCount">—</p></div>
+      </div>
+    </div>
+  </section>
+
+  <footer id="updated"></footer>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const fmt$ = d3.format('$,.0f');
+  const money = (v) => (v < 0 ? '−' : '') + fmt$(Math.abs(v));
+  const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + fmt$(Math.abs(v));
+  const pct = d3.format('.0%');
+  const pd = (s) => new Date(String(s).slice(0, 10) + 'T00:00:00');
+  const pm = (m) => pd(m + '-01');
+  const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const tone = (el, v) => { el.classList.toggle('up', v > 0); el.classList.toggle('down', v < 0); };
+  const tickFmt = (v) => { const a = Math.abs(v), s = v < 0 ? '−' : ''; return a >= 1e6 ? s + '$' + d3.format('.2~f')(a / 1e6) + 'M' : a >= 1000 ? s + '$' + d3.format('~')(Math.round(a / 100) / 10) + 'K' : s + fmt$(a); };
+  const palette = () => ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--c7'].map(css);
+  const open = new Set();
+
+  // Tabs
+  const showTab = (name) => {
+    document.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== name; });
+    document.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    history.replaceState(null, '', '#' + name);
+    redraw();
+  };
+  document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+  let D = null;
+  let repMonth = null;
+
+  const measure = (svg, labels) => { const t = svg.append('text'); let w = 0; for (const l of labels) { t.text(l); w = Math.max(w, t.node().getComputedTextLength()); } t.remove(); return Math.ceil(w); };
+  const tipFor = (el) => { const t = mk('div', 'tip'); t.hidden = true; el.append(t); return t; };
+  const place = (el, tip, ev) => { const [x, y] = d3.pointer(ev, el); tip.hidden = false; tip.style.left = Math.max(0, Math.min(el.clientWidth - tip.offsetWidth, x + 12)) + 'px'; tip.style.top = Math.max(0, y - tip.offsetHeight - 8) + 'px'; };
+  const keep = (key, det) => { if (open.has(key)) det.open = true; det.addEventListener('toggle', () => (det.open ? open.add(key) : open.delete(key))); };
+
+  // ---------- Budget ----------
+  const bar = (r, small, pace) => {
+    const spent = Math.max(0, r.spent), due = Math.max(0, r.upcoming);
+    const scale = Math.max(r.budget, spent + due, 1);
+    const over = spent + due > 0 && spent + due > r.budget;
+    const b = mk('div', 'bar' + (small ? ' sm' : ''));
+    const c = over ? 'var(--bad)' : 'var(--c1)';
+    const s1 = mk('div', 'seg'); s1.style.width = (spent / scale) * 100 + '%'; s1.style.background = c;
+    const s2 = mk('div', 'seg'); s2.style.width = (due / scale) * 100 + '%'; s2.style.background = c; s2.style.opacity = .4;
+    b.append(s1, s2);
+    if (over && r.budget > 0) { const t = mk('i', 'tick limit'); t.style.left = (r.budget / scale) * 100 + '%'; b.append(t); }
+    if (pace != null && r.budget > 0) { const t = mk('i', 'tick'); t.style.left = Math.min(100, (r.budget * pace / scale) * 100) + '%'; b.append(t); }
+    return b;
+  };
+  const rowEl = (r, caret) => {
+    const w = mk('div', 'row'), top = mk('div', 'row-top'), nm = mk('span', 'name');
+    nm.append(mk('span', 'caret', caret ? '›' : ''), document.createTextNode(r.name));
+    const st = mk('span', 'status');
+    if (r.left < 0) { st.classList.add('over'); st.textContent = money(-r.left) + (r.budget > 0 ? ' over' : ' over · no budget'); }
+    else if (r.budget > 0) { st.classList.add('ok'); st.textContent = money(r.left) + ' left'; }
+    else { st.classList.add('none'); st.textContent = 'No budget set'; }
+    top.append(nm, st);
+    w.append(top, bar(r, true), mk('div', 'meta', money(r.spent) + ' spent' + (r.upcoming > 0 ? ' · ' + money(r.upcoming) + ' due' : '') + (r.budget > 0 ? ' · ' + money(r.budget) + ' budget' : '')));
+    return w;
+  };
+  const shows = (r) => r.budget > 0 || r.spent !== 0 || r.upcoming > 0;
+
+  const drawBudget = () => {
+    const t = D.budget.total;
+    $('left').textContent = money(t.left); $('left').classList.toggle('down', t.left < 0);
+    $('tBudget').textContent = money(t.budget); $('tSpent').textContent = money(t.spent); $('tDue').textContent = money(t.upcoming);
+    const n = new Date(), m = pm(D.month);
+    const sameMonth = n.getFullYear() === m.getFullYear() && n.getMonth() === m.getMonth();
+    const pace = sameMonth ? n.getDate() / new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate() : 1;
+    $('overallBar').replaceChildren(...bar(t, false, pace).childNodes);
+    const groups = D.budget.groups.filter(shows);
+    const over = groups.filter((g) => g.left < 0).length, counted = groups.filter((g) => g.budget > 0 || g.left < 0).length;
+    $('say').textContent = (t.left < 0 ? "Heads up: spending plus bills still due is over this month's budget. " : "We're within this month's budget so far, counting bills still due. ") + over + ' of ' + counted + ' groups are over budget.';
+    groups.sort((a, b) => (b.left < 0) - (a.left < 0) || (b.budget > 0) - (a.budget > 0) || b.budget - a.budget || b.spent - a.spent);
+    $('groups').replaceChildren(...groups.map((g) => {
+      const kids = g.children.filter(shows).sort((a, b) => (b.left < 0) - (a.left < 0) || (b.spent + b.upcoming) - (a.spent + a.upcoming));
+      if (!kids.length) { const d = mk('div', 'g'); d.append(rowEl(g, false)); return d; }
+      const det = mk('details', 'g'); keep('b:' + g.name, det);
+      const s = mk('summary'); s.append(rowEl(g, true)); det.append(s);
+      const k = mk('div', 'kids'); k.append(...kids.map((c) => rowEl(c, false))); det.append(k);
+      return det;
+    }));
+  };
+
+  // ---------- Reports ----------
+  const monthBars = (el, key, colorOf, fmtV) => {
+    const rows = D.months.map((r, i, a) => ({ ...r, date: pm(r.month), partial: i === a.length - 1 }));
+    const avg = D.avg[key];
+    const W = el.clientWidth || 320, H = 220;
+    const y = d3.scaleLinear(d3.extent(rows.map((r) => r[key]).concat([avg, 0])), [H - 24, 14]).nice();
+    const ticks = y.ticks(4);
+    const svg = d3.create('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    el.replaceChildren(svg.node());
+    const ml = measure(svg, ticks.map(tickFmt)) + 8;
+    const x = d3.scaleBand(rows.map((r) => r.month), [ml, W - 4]).padding(0.28);
+    svg.selectAll('line.g').data(ticks).join('line').attr('x1', ml).attr('x2', W - 4).attr('y1', y).attr('y2', y).attr('stroke', css('--grid'));
+    svg.selectAll('text.y').data(ticks).join('text').attr('x', ml - 8).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').text(tickFmt);
+    const every = W < 420 ? 2 : 1;
+    svg.selectAll('text.x').data(rows.filter((r, i) => (rows.length - 1 - i) % every === 0)).join('text').attr('x', (r) => x(r.month) + x.bandwidth() / 2).attr('y', H - 6).attr('text-anchor', 'middle').text((r) => d3.timeFormat('%b')(r.date));
+    const bw = Math.min(28, x.bandwidth()), bx = (r) => x(r.month) + (x.bandwidth() - bw) / 2;
+    svg.selectAll('rect.v').data(rows).join('rect').attr('x', bx).attr('width', bw).attr('y', (r) => Math.min(y(0), y(r[key]))).attr('height', (r) => Math.abs(y(r[key]) - y(0))).attr('rx', 3).attr('fill', (r) => colorOf(r[key])).attr('opacity', (r) => (r.partial ? 0.4 : 1));
+    svg.append('line').attr('x1', ml).attr('x2', W - 4).attr('y1', y(avg)).attr('y2', y(avg)).attr('stroke', css('--ref')).attr('stroke-width', 2).attr('stroke-dasharray', '5 4');
+    const lbl = svg.append('text').attr('x', W - 6).attr('y', y(avg) - 5).attr('text-anchor', 'end').text('Avg ' + fmtV(avg));
+    if (y(avg) - 5 < 10) lbl.attr('y', y(avg) + 14);
+    const tip = tipFor(el);
+    svg.selectAll('rect.hit').data(rows).join('rect').attr('x', (r) => x(r.month) - x.step() * x.paddingInner() / 2).attr('width', x.step()).attr('y', 0).attr('height', H - 24).attr('fill', 'transparent')
+      .on('pointerenter pointermove', (ev, r) => { tip.replaceChildren(mk('div', 't', d3.timeFormat('%B %Y')(r.date) + (r.partial ? ' (so far)' : '')), mk('div', '', fmtV(r[key]))); place(el, tip, ev); })
+      .on('pointerleave', () => { tip.hidden = true; });
+  };
+
+  const pal = () => {
+    const totals = new Map();
+    for (const m of D.categoriesByMonth) for (const g of m.groups) totals.set(g.name, (totals.get(g.name) || 0) + Math.max(0, g.spent));
+    const order = [...totals].filter((t) => t[1] > 0).sort((a, b) => b[1] - a[1]).map((t) => t[0]);
+    const top = order.slice(0, 7), colors = palette();
+    const keys = order.length > 7 ? top.concat(['Everything else']) : top;
+    const color = (n) => (top.includes(n) ? colors[top.indexOf(n)] : css('--muted-fill'));
+    const keyOf = (n) => (top.includes(n) ? n : 'Everything else');
+    return { keys, color, keyOf };
+  };
+  const pick = () => { const ms = D.categoriesByMonth.map((m) => m.month); return repMonth && ms.includes(repMonth) ? repMonth : ms[ms.length - 1]; };
+
+  const drawSpendChart = () => {
+    const el = $('spentChart'), P = pal(), sel = pick();
+    const table = D.categoriesByMonth.map((m, i, a) => {
+      const o = { month: m.month, date: pm(m.month), partial: i === a.length - 1, total: 0, parts: [] };
+      for (const k of P.keys) o[k] = 0;
+      for (const g of m.groups) { const v = Math.max(0, g.spent); o[P.keyOf(g.name)] += v; o.total += g.spent; if (v > 0) o.parts.push([g.name, v]); }
+      o.parts.sort((p, q) => q[1] - p[1]);
+      return o;
+    });
+    const avg = D.avg.spent, W = el.clientWidth || 320, H = 240;
+    const series = d3.stack().keys(P.keys)(table);
+    const y = d3.scaleLinear([0, (d3.max(table, (r) => d3.sum(P.keys, (k) => r[k])) || 1) * 1.05], [H - 24, 14]).nice();
+    const ticks = y.ticks(4);
+    const svg = d3.create('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    el.replaceChildren(svg.node());
+    const ml = measure(svg, ticks.map(tickFmt)) + 8;
+    const x = d3.scaleBand(table.map((r) => r.month), [ml, W - 4]).padding(0.28);
+    svg.selectAll('line.g').data(ticks).join('line').attr('x1', ml).attr('x2', W - 4).attr('y1', y).attr('y2', y).attr('stroke', css('--grid'));
+    svg.selectAll('text.y').data(ticks).join('text').attr('x', ml - 8).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').text(tickFmt);
+    const every = W < 420 ? 2 : 1;
+    svg.selectAll('text.x').data(table.filter((r, i) => (table.length - 1 - i) % every === 0 || r.month === sel)).join('text').attr('x', (r) => x(r.month) + x.bandwidth() / 2).attr('y', H - 6).attr('text-anchor', 'middle').attr('font-weight', (r) => (r.month === sel ? 600 : 400)).style('fill', (r) => (r.month === sel ? css('--fg') : null)).text((r) => d3.timeFormat('%b')(r.date));
+    const bw = Math.min(28, x.bandwidth()), bx = (m) => x(m) + (x.bandwidth() - bw) / 2;
+    for (const s of series) {
+      svg.selectAll(null).data(s).join('rect').attr('x', (p) => bx(p.data.month)).attr('width', bw).attr('y', (p) => y(p[1])).attr('height', (p) => Math.max(0, y(p[0]) - y(p[1])))
+        .attr('fill', s.key === 'Everything else' ? css('--muted-fill') : P.color(s.key)).attr('opacity', (p) => (p.data.month === sel ? 1 : p.data.partial ? 0.3 : 0.55));
+    }
+    svg.append('rect').attr('x', bx(sel) - 3).attr('width', bw + 6).attr('y', H - 22).attr('height', 2).attr('rx', 1).attr('fill', css('--fg'));
+    svg.append('line').attr('x1', ml).attr('x2', W - 4).attr('y1', y(avg)).attr('y2', y(avg)).attr('stroke', css('--ref')).attr('stroke-width', 2).attr('stroke-dasharray', '5 4');
+    const lbl = svg.append('text').attr('x', W - 6).attr('y', y(avg) - 5).attr('text-anchor', 'end').text('Avg ' + money(avg));
+    if (y(avg) - 5 < 10) lbl.attr('y', y(avg) + 14);
+    const tip = tipFor(el);
+    svg.selectAll('rect.hit').data(table).join('rect').attr('x', (r) => x(r.month) - x.step() * x.paddingInner() / 2).attr('width', x.step()).attr('y', 0).attr('height', H - 24).attr('fill', 'transparent').style('cursor', 'pointer')
+      .on('pointerenter pointermove', (ev, r) => { tip.replaceChildren(mk('div', 't', d3.timeFormat('%B %Y')(r.date) + (r.partial ? ' (so far)' : '')), mk('div', '', 'Spending ' + money(r.total)), ...r.parts.slice(0, 3).map((p) => mk('div', '', p[0] + ' ' + money(p[1])))); place(el, tip, ev); })
+      .on('pointerleave', () => { tip.hidden = true; })
+      .on('click', (ev, r) => { repMonth = r.month; drawSpendChart(); drawSpendBreak(); });
+    $('spentLegend').replaceChildren(...P.keys.map((k) => { const sp = mk('span'); const sw = mk('i', 'sw'); sw.style.background = k === 'Everything else' ? css('--muted-fill') : P.color(k); sp.append(sw, document.createTextNode(k)); return sp; }));
+  };
+
+  const drawSpendBreak = () => {
+    const m = pick(), P = pal();
+    const month = D.categoriesByMonth.find((x) => x.month === m);
+    const last = D.categoriesByMonth[D.categoriesByMonth.length - 1].month;
+    const groups = month.groups.filter((g) => g.spent !== 0).sort((a, b) => b.spent - a.spent);
+    const tot = d3.sum(groups, (g) => Math.max(0, g.spent)) || 1, max = d3.max(groups, (g) => g.spent) || 1;
+    $('spentMonth').textContent = d3.timeFormat('%B %Y')(pm(m)) + (m === last ? ' so far' : '') + ' · ' + money(d3.sum(groups, (g) => g.spent));
+    if (!groups.length) { $('spentBreak').replaceChildren(mk('p', 'note', 'No spending this month.')); return; }
+    const line = (r, color, isGroup, caret) => {
+      const w = mk('div', 'row'), top = mk('div', 'row-top'), nm = mk('span', 'name');
+      if (isGroup) nm.append(mk('span', 'caret', caret ? '›' : ''));
+      if (color) { const sw = mk('i', 'sw'); sw.style.background = color; nm.append(sw); }
+      nm.append(document.createTextNode(r.name));
+      top.append(nm, mk('span', 'status none', money(r.spent) + (r.spent > 0 ? ' · ' + pct(r.spent / tot) : '')));
+      w.append(top);
+      if (isGroup) { const b = mk('div', 'bar sm'); const s = mk('div', 'seg'); s.style.width = Math.max(0, r.spent / max) * 100 + '%'; s.style.background = color; s.style.borderRadius = '6px'; b.append(s); w.append(b); }
+      return w;
+    };
+    $('spentBreak').replaceChildren(...groups.map((g) => {
+      const color = P.keyOf(g.name) === 'Everything else' ? css('--muted-fill') : P.color(g.name);
+      const kids = g.children.slice().sort((a, b) => b.spent - a.spent);
+      if (!kids.length) { const d = mk('div', 'g'); d.append(line(g, color, true, false)); return d; }
+      const det = mk('details', 'g'); keep('r:' + g.name, det);
+      const s = mk('summary'); s.append(line(g, color, true, true)); det.append(s);
+      const k = mk('div', 'kids'); k.append(...kids.map((c) => line(c, null, false))); det.append(k);
+      return det;
+    }));
+  };
+
+  const drawReports = () => {
+    $('ytdNet').textContent = signed(D.ytd.net); tone($('ytdNet'), D.ytd.net);
+    $('avgNet').textContent = signed(D.avg.net); tone($('avgNet'), D.avg.net);
+    $('ytdSpent').textContent = money(D.ytd.spent); $('avgSpent').textContent = money(D.avg.spent);
+    $('ytdIncome').textContent = money(D.ytd.income); $('avgIncome').textContent = money(D.avg.income);
+    monthBars($('netChart'), 'net', (v) => (v < 0 ? css('--bad') : css('--ok')), signed);
+    monthBars($('incomeChart'), 'income', () => css('--ok'), money);
+    drawSpendChart(); drawSpendBreak();
+  };
+
+  // ---------- Net worth ----------
+  const drawNetworth = () => {
+    const N = D.networth;
+    $('nwNow').textContent = money(N.now);
+    $('nw30').textContent = signed(N.change30); tone($('nw30'), N.change30);
+    $('nw1y').textContent = signed(N.change1y); tone($('nw1y'), N.change1y);
+    const el = $('nwChart'), pts = N.points.map((p) => ({ d: pd(p.date), v: p.net }));
+    if (pts.length < 2) { el.replaceChildren(); return; }
+    const W = el.clientWidth || 320, H = 200;
+    const [lo, hi] = d3.extent(pts, (p) => p.v), pad = (hi - lo) * 0.08 || 1;
+    const y = d3.scaleLinear([lo - pad, hi + pad], [H - 24, 8]).nice(), ticks = y.ticks(4);
+    const svg = d3.create('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    el.replaceChildren(svg.node());
+    const ml = measure(svg, ticks.map(tickFmt)) + 8;
+    const x = d3.scaleTime(d3.extent(pts, (p) => p.d), [ml, W - 6]);
+    svg.selectAll('line.g').data(ticks).join('line').attr('x1', ml).attr('x2', W - 6).attr('y1', y).attr('y2', y).attr('stroke', css('--grid'));
+    svg.selectAll('text.y').data(ticks).join('text').attr('x', ml - 8).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').text(tickFmt);
+    svg.selectAll('text.x').data(x.ticks(W < 420 ? 4 : 6)).join('text').attr('x', x).attr('y', H - 6).attr('text-anchor', 'middle').text(d3.timeFormat('%b'));
+    const c = css('--c1');
+    svg.append('path').datum(pts).attr('d', d3.area().x((p) => x(p.d)).y0(H - 24).y1((p) => y(p.v))).attr('fill', c).attr('fill-opacity', 0.1);
+    svg.append('path').datum(pts).attr('d', d3.line().x((p) => x(p.d)).y((p) => y(p.v))).attr('fill', 'none').attr('stroke', c).attr('stroke-width', 2).attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round');
+    const dot = svg.append('circle').attr('r', 4).attr('fill', c).attr('stroke', css('--panel')).attr('stroke-width', 2).attr('opacity', 0);
+    const tip = tipFor(el), bis = d3.bisector((p) => p.d).center;
+    svg.append('rect').attr('x', ml).attr('width', W - 6 - ml).attr('height', H - 24).attr('fill', 'transparent')
+      .on('pointerenter pointermove', (ev) => {
+        const [mx] = d3.pointer(ev, svg.node());
+        const p = pts[bis(pts, x.invert(mx * W / svg.node().getBoundingClientRect().width))]; if (!p) return;
+        dot.attr('cx', x(p.d)).attr('cy', y(p.v)).attr('opacity', 1);
+        tip.replaceChildren(mk('div', 't', d3.timeFormat('%b %-d, %Y')(p.d)), mk('div', '', 'Net worth ' + money(p.v))); place(el, tip, ev);
+      })
+      .on('pointerleave', () => { tip.hidden = true; dot.attr('opacity', 0); });
+  };
+
+  // ---------- Recurring ----------
+  const drawRecurring = () => {
+    $('rcMonthly').textContent = money(D.recurring.monthly);
+    $('rcOther').textContent = money(D.recurring.other);
+    $('rcYear').textContent = money(D.recurring.perYear);
+    $('rcCount').textContent = String(D.recurring.count);
+  };
+
+  const redraw = () => {
+    if (!D) return;
+    const tab = document.querySelector('[data-panel]:not([hidden])');
+    const name = tab ? tab.dataset.panel : 'budget';
+    if (name === 'budget') drawBudget();
+    if (name === 'reports') drawReports();
+    if (name === 'networth') drawNetworth();
+    if (name === 'recurring') drawRecurring();
+  };
+
+  let lastW = 0;
+  window.addEventListener('resize', () => { if (Math.abs(window.innerWidth - lastW) > 20) { lastW = window.innerWidth; redraw(); } });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
+
+  fetch('data.json?v=' + Date.now(), { cache: 'no-store' })
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then((data) => {
+      D = data; lastW = window.innerWidth;
+      $('loading').remove();
+      $('month').textContent = d3.timeFormat('%B %Y')(pm(D.month));
+      $('updated').textContent = 'Updated ' + d3.timeFormat('%b %-d at %-I:%M %p')(new Date(D.generatedAt)) + ' · refreshed every morning from Copilot';
+      const linked = location.hash.slice(1);
+      showTab(document.querySelector('[data-panel="' + linked + '"]') ? linked : 'budget');
+    })
+    .catch(() => { $('loading').textContent = "Couldn't load the latest numbers. Try again in a minute."; });
+})();
+</script>
+</body>
+</html>
