@@ -1,4 +1,4 @@
-# The Ilalio Treasury
+# Ilalio Dashboard
 
 A trimmed, public view of the household budget, refreshed every morning from Copilot Money.
 
